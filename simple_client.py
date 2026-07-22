@@ -17,16 +17,25 @@ from pathlib import Path
 import urllib.request
 import zipfile
 import shutil
+import platform as _platform
+
+# 平台标识
+IS_WINDOWS = sys.platform == "win32"
+IS_MACOS = sys.platform == "darwin"
 
 def is_admin():
-    """检查是否以管理员身份运行"""
+    """检查是否以管理员身份运行（macOS/Linux 不强制，返回 True）"""
+    if not IS_WINDOWS:
+        return True
     try:
         return ctypes.windll.shell32.IsUserAnAdmin() != 0
     except:
         return False
 
 def run_as_admin():
-    """以管理员身份重新启动程序"""
+    """以管理员身份重新启动程序（仅 Windows）"""
+    if not IS_WINDOWS:
+        return False
     if getattr(sys, 'frozen', False):
         # PyInstaller 打包后的 exe
         executable = sys.executable
@@ -53,7 +62,9 @@ TASK_NAME = "XunShaYunLinkTool"
 
 
 def install_admin_task():
-    """一次性安装最高权限计划任务(创建后双击桌面快捷方式免UAC)"""
+    """一次性安装最高权限计划任务(创建后双击桌面快捷方式免UAC)（仅 Windows）"""
+    if not IS_WINDOWS:
+        return False, "仅 Windows 支持此功能"
     if not getattr(sys, 'frozen', False):
         return False, "仅打包后的 EXE 可安装"
 
@@ -87,6 +98,8 @@ def install_admin_task():
 
 def uninstall_admin_task():
     """卸载管理员计划任务和快捷方式"""
+    if not IS_WINDOWS:
+        return
     subprocess.run(['schtasks', '/delete', '/tn', TASK_NAME, '/f'],
                    capture_output=True)
     desktop = Path(os.environ.get('USERPROFILE', '')) / 'Desktop'
@@ -100,6 +113,8 @@ def uninstall_admin_task():
 
 def has_admin_task():
     """检查计划任务是否已存在"""
+    if not IS_WINDOWS:
+        return False
     r = subprocess.run(['schtasks', '/query', '/tn', TASK_NAME],
                        capture_output=True, text=True)
     return r.returncode == 0
@@ -192,18 +207,37 @@ class LicenseManager:
 class EasyTierManager:
     """EasyTier 管理器（内置资源自动释放，无需联网下载）"""
 
-    # 启动时需要的 4 个文件
-    REQUIRED_FILES = ['easytier-core.exe', 'wintun.dll', 'WinDivert64.sys', 'Packet.dll']
+    # 启动时需要的文件（按平台不同）
+    if IS_WINDOWS:
+        REQUIRED_FILES = ['easytier-core.exe', 'wintun.dll', 'WinDivert64.sys', 'Packet.dll']
+    elif IS_MACOS:
+        REQUIRED_FILES = ['easytier-core', 'easytier-cli']
+    else:
+        REQUIRED_FILES = ['easytier-core']
 
     def __init__(self):
-        self.app_dir = Path(os.environ.get('LOCALAPPDATA', '')) / 'PalworldClient'
-        self.app_dir.mkdir(parents=True, exist_ok=True)
-        self.easytier_path = self.app_dir / 'easytier-core.exe'
+        if IS_WINDOWS:
+            self.app_dir = Path(os.environ.get('LOCALAPPDATA', '')) / 'PalworldClient'
+            self.app_dir.mkdir(parents=True, exist_ok=True)
+            self.easytier_path = self.app_dir / 'easytier-core.exe'
+        elif IS_MACOS:
+            # macOS: 内置二进制在 app bundle 的 Contents/MacOS/bin/
+            if getattr(sys, 'frozen', False):
+                base = Path(sys.executable).parent  # Contents/MacOS
+            else:
+                base = Path(__file__).parent
+            self.app_dir = base / 'bin'
+            self.easytier_path = self.app_dir / 'easytier-core'
+        else:
+            base = Path(sys.executable).parent if getattr(sys, 'frozen', False) else Path(__file__).parent
+            self.app_dir = base
+            self.easytier_path = base / 'easytier-core'
         self.process = None
 
     def _find_bundled_dir(self):
         """查找内置资源目录
-        PyInstaller 打包后会放在 sys._MEIPASS/bundled/
+        PyInstaller 打包后会放在 sys._MEIPASS/bundled/（Windows）
+        或 sys.executable 同目录的 bin/（macOS）
         开发模式时放在脚本同目录的 bundled/"""
         # 1. PyInstaller 临时目录（生产环境）
         meipass = getattr(sys, '_MEIPASS', None)
@@ -211,6 +245,11 @@ class EasyTierManager:
             bundled = Path(meipass) / 'bundled'
             if bundled.exists():
                 return bundled
+            # macOS: 二进制放在 bin/
+            if IS_MACOS:
+                bin_dir = Path(meipass) / 'bin'
+                if bin_dir.exists():
+                    return bin_dir
         # 2. 脚本/EXE 同目录（开发环境或绿色版）
         if getattr(sys, 'frozen', False):
             exe_dir = Path(sys.executable).parent
@@ -219,6 +258,10 @@ class EasyTierManager:
         bundled = exe_dir / 'bundled'
         if bundled.exists():
             return bundled
+        if IS_MACOS:
+            bin_dir = exe_dir / 'bin'
+            if bin_dir.exists():
+                return bin_dir
         return None
 
     def _extract_bundled(self, log_callback=None):
@@ -309,6 +352,13 @@ class EasyTierManager:
             if not self.is_installed():
                 return False, "EasyTier 未安装"
 
+            # macOS 下确保二进制有可执行权限
+            if IS_MACOS and os.path.exists(str(self.easytier_path)):
+                try:
+                    os.chmod(str(self.easytier_path), 0o755)
+                except Exception:
+                    pass
+
             cmd = [
                 str(self.easytier_path),
                 "-p", f"{NETWORK_CONFIG['protocol']}://{NETWORK_CONFIG['server']}",
@@ -319,18 +369,19 @@ class EasyTierManager:
                 "--no-listener"
             ]
 
-            # 启动进程(隐藏窗口)
-            startupinfo = subprocess.STARTUPINFO()
-            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-
-            self.process = subprocess.Popen(
-                cmd,
+            popen_kwargs = dict(
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
-                startupinfo=startupinfo,
-                creationflags=subprocess.CREATE_NO_WINDOW
             )
+            if IS_WINDOWS:
+                # 启动进程(隐藏窗口)
+                startupinfo = subprocess.STARTUPINFO()
+                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                popen_kwargs['startupinfo'] = startupinfo
+                popen_kwargs['creationflags'] = subprocess.CREATE_NO_WINDOW
+
+            self.process = subprocess.Popen(cmd, **popen_kwargs)
 
             # 启动日志线程
             def log_reader():
