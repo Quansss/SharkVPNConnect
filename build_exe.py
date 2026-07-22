@@ -20,7 +20,11 @@ def check_pyinstaller():
 
 def build():
     """构建 exe"""
-    base_dir = Path("C:\\Users\\15062\\.qclaw\\workspace\\palworld-client-app")
+    # 兼容本地和 CI 环境
+    if os.environ.get("GITHUB_WORKSPACE"):
+        base_dir = Path(os.environ["GITHUB_WORKSPACE"])
+    else:
+        base_dir = Path(__file__).parent.resolve()
     
     print("=" * 60)
     print("Palworld 联机客户端 - 构建脚本")

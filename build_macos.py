@@ -197,11 +197,13 @@ def main():
     if not is_macos:
         print("\n继续生成构建配置，但不实际打包...")
     
-    # 自动检测项目目录
-    if is_macos:
+    # 自动检测项目目录（兼容本地和 CI）
+    if os.environ.get("GITHUB_WORKSPACE"):
+        base_dir = Path(os.environ["GITHUB_WORKSPACE"])
+    elif is_macos:
         base_dir = Path(__file__).parent.resolve()
     else:
-        base_dir = Path(r"C:\Users\15062\.qclaw\workspace\palworld-client-app")
+        base_dir = Path(__file__).parent.resolve()
     
     print(f"项目目录: {base_dir}")
     
