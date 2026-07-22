@@ -123,7 +123,7 @@ def build_macos_app(base_dir, arch, et_dir):
 import sys, os
 from pathlib import Path
 from PyInstaller.building.api import EXE, COLLECT, PYZ
-from PyInstaller.building.macOS import BUNDLE
+from PyInstaller.building.osx import BUNDLE
 
 block_cipher = None
 
