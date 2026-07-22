@@ -48,9 +48,9 @@ def check_pyinstaller():
 
 
 def download_macos_easytier(base_dir, arch):
-    """下载 macOS 版 EasyTier"""
-    et_dir = base_dir / "easytier-extract" / f"easytier-macos-{arch}"
-    et_dir.mkdir(parents=True, exist_ok=True)
+    """下载 macOS 版 EasyTier，返回含二进制的目录"""
+    extract_root = base_dir / "easytier-extract" / f"easytier-macos-{arch}"
+    extract_root.mkdir(parents=True, exist_ok=True)
 
     EASYTIER_VERSION = "v2.6.4"
     if arch == "arm64":
@@ -68,18 +68,32 @@ def download_macos_easytier(base_dir, arch):
         sys.exit(1)
 
     size = zip_path.stat().st_size
-    print(f"  下载完成: {size} bytes")
+    print(f"  下载完成: {size} bytes ({size//1024//1024} MB)")
     if size < 10000:
         print(f"  ⚠️  文件可能过小（{size} bytes），内容: {zip_path.read_bytes()[:200]}")
         sys.exit(1)
 
-    print(f"  解压到 {et_dir}...")
-    subprocess.run(["unzip", "-o", str(zip_path), "-d", str(et_dir)], check=True, capture_output=True)
+    print(f"  解压到 {extract_root}...")
+    subprocess.run(["unzip", "-o", str(zip_path), "-d", str(extract_root)], check=True, capture_output=True)
     zip_path.unlink()
 
-    files = list(et_dir.glob("*"))
-    print(f"  包含文件: {[f.name for f in files]}")
-    return et_dir
+    # 找到实际的二进制目录（zip 嵌套一层：easytier-macos-x86_64-v2.6.4/easytier-core）
+    # 搜索 easytier-core 或 easytier-cli 所在位置
+    candidates = list(extract_root.glob("*/"))
+    all_files = list(extract_root.glob("**/*"))
+    print(f"  解压内容: {[str(f) for f in all_files[:10]]}")
+
+    # 找到含 easytier-core 的目录
+    for f in all_files:
+        if f.name in ('easytier-core', 'easytier-cli'):
+            et_dir = f.parent
+            print(f"  ✅ 找到二进制: {f.name}，位于 {et_dir}")
+            return et_dir
+
+    print(f"  ❌ 未找到 easytier-core！目录内容:")
+    for f in all_files:
+        print(f"    {f}")
+    sys.exit(1)
 
 
 def build_macos_app(base_dir, arch, et_dir):
@@ -108,8 +122,8 @@ def build_macos_app(base_dir, arch, et_dir):
     spec_content = f'''# -*- mode: python ; coding: utf-8 -*-
 import sys, os
 from pathlib import Path
-from PyInstaller.building.build_main import Analysis, PYZ
-from PyInstaller.building.make_spec import EXE, COLLECT, BUNDLE
+from PyInstaller.building.api import EXE, COLLECT, PYZ
+from PyInstaller.building.datastruct import Tree, struct
 
 block_cipher = None
 
