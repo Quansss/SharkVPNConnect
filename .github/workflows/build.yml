@@ -12,6 +12,10 @@ jobs:
   build:
     name: Build (${{ matrix.label }})
     runs-on: ${{ matrix.os }}
+    # 取消正在跑的上一轮 build（避免 runner 排队、节省时间）
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: true
     strategy:
       fail-fast: false
       matrix:
@@ -26,11 +30,6 @@ jobs:
             arch: arm64
             artifact_name: 迅鲨加速器-macOS-arm64
             artifact_zip: 迅鲨加速器-v1.0.0-macOS-arm64.zip
-          - os: macos-13
-            label: macOS-x86_64
-            arch: x86_64
-            artifact_name: 迅鲨加速器-macOS-x64
-            artifact_zip: 迅鲨加速器-v1.0.0-macOS-x64.zip
 
     steps:
       - name: Checkout
