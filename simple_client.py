@@ -221,12 +221,9 @@ class EasyTierManager:
             self.app_dir.mkdir(parents=True, exist_ok=True)
             self.easytier_path = self.app_dir / 'easytier-core.exe'
         elif IS_MACOS:
-            # macOS: 内置二进制在 app bundle 的 Contents/MacOS/bin/
-            if getattr(sys, 'frozen', False):
-                base = Path(sys.executable).parent  # Contents/MacOS
-            else:
-                base = Path(__file__).parent
-            self.app_dir = base / 'bin'
+            # macOS: 使用用户可写目录，避免 .app bundle 只读问题
+            self.app_dir = Path.home() / 'Library' / 'Application Support' / 'SharkVPNConnect' / 'bin'
+            self.app_dir.mkdir(parents=True, exist_ok=True)
             self.easytier_path = self.app_dir / 'easytier-core'
         else:
             base = Path(sys.executable).parent if getattr(sys, 'frozen', False) else Path(__file__).parent
@@ -235,33 +232,45 @@ class EasyTierManager:
         self.process = None
 
     def _find_bundled_dir(self):
-        """查找内置资源目录
-        PyInstaller 打包后会放在 sys._MEIPASS/bundled/（Windows）
-        或 sys.executable 同目录的 bin/（macOS）
-        开发模式时放在脚本同目录的 bundled/"""
-        # 1. PyInstaller 临时目录（生产环境）
+        """查找内置资源目录（必须包含 REQUIRED_FILES 所有文件）"""
+        required = set(self.REQUIRED_FILES)
+
+        def _check_dir(d):
+            if not d or not d.exists() or not d.is_dir():
+                return None
+            if all((d / f).is_file() for f in required):
+                return d
+            return None
+
+        # 候选根目录
+        roots = []
         meipass = getattr(sys, '_MEIPASS', None)
         if meipass:
-            bundled = Path(meipass) / 'bundled'
-            if bundled.exists():
-                return bundled
-            # macOS: 二进制放在 bin/
-            if IS_MACOS:
-                bin_dir = Path(meipass) / 'bin'
-                if bin_dir.exists():
-                    return bin_dir
-        # 2. 脚本/EXE 同目录（开发环境或绿色版）
+            roots.append(Path(meipass))
         if getattr(sys, 'frozen', False):
-            exe_dir = Path(sys.executable).parent
+            roots.append(Path(sys.executable).parent)
+            # macOS BUNDLE 结构：COLLECT name 可能作为子目录
+            if IS_MACOS:
+                roots.append(Path(sys.executable).parent / '迅鲨加速器')
         else:
-            exe_dir = Path(__file__).parent
-        bundled = exe_dir / 'bundled'
-        if bundled.exists():
-            return bundled
-        if IS_MACOS:
-            bin_dir = exe_dir / 'bin'
-            if bin_dir.exists():
-                return bin_dir
+            roots.append(Path(__file__).parent)
+
+        # 1) 浅层查找（根 / bin / bundled）
+        for r in roots:
+            for d in [r, r / 'bin', r / 'bundled']:
+                hit = _check_dir(d)
+                if hit:
+                    return hit
+
+        # 2) macOS 兜底：在 exe 附近递归查找（限定深度）
+        if IS_MACOS and getattr(sys, 'frozen', False):
+            base = Path(sys.executable).parent
+            try:
+                for p in base.glob('**/easytier-core'):
+                    if p.is_file() and _check_dir(p.parent):
+                        return p.parent
+            except Exception:
+                pass
         return None
 
     def _extract_bundled(self, log_callback=None):
