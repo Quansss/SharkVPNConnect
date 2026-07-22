@@ -427,16 +427,25 @@ class MainApp:
     def __init__(self):
         self.root = tk.Tk()
         # 设置窗口图标（支持 PyInstaller 打包后从临时目录读取）
+        # 注意：iconbitmap 在 macOS Aqua Tk 上会因 .ico 格式导致整个 Tk 解释器崩溃
         try:
             if getattr(sys, 'frozen', False):
                 icon_path = Path(sys._MEIPASS) / "icon.ico"
             else:
                 icon_path = Path(__file__).parent / "icon.ico"
-            if icon_path.exists():
+            if icon_path.exists() and not IS_MACOS:
                 self.root.iconbitmap(str(icon_path))
         except Exception:
             pass  # 图标加载失败不影响主程序
         self.root.title(f"{APP_NAME} v{VERSION}")
+        # macOS: 强制窗口置顶并获得焦点（否则可能被其他窗口遮住看不到）
+        if IS_MACOS:
+            try:
+                self.root.lift()
+                self.root.attributes('-topmost', True)
+                self.root.after(200, lambda: self.root.attributes('-topmost', False))
+            except Exception:
+                pass
         self.root.update_idletasks()
         w, h = 520, 420
         sw = self.root.winfo_screenwidth()
