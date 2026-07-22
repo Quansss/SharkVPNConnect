@@ -195,13 +195,39 @@ def create_dmg(app_path, output_path, arch):
         print("  安装命令: brew install create-dmg")
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--arch", choices=["arm64", "x86_64"], default=None,
+                        help="目标架构（默认自动检测主机架构）")
+    args, _ = parser.parse_known_args()
+    
     print("=" * 60)
     print("迅鲨加速器 - macOS 构建脚本")
     print("=" * 60)
     
     is_macos = check_platform()
-    arch, arch_name = check_arch()
-    print(f"\n架构: {arch_name} ({arch})")
+    host_arch, host_arch_name = check_arch()
+    
+    # 目标架构（CLI 传参优先，否则跟随主机）
+    arch = args.arch or host_arch
+    arch_name = "Apple Silicon (M1/M2/M3/M4)" if arch == "arm64" else "Intel / x86_64"
+    print(f"\n主机架构: {host_arch_name} ({host_arch})")
+    print(f"目标架构: {arch_name} ({arch})")
+    
+    # 如果要构建 x86_64 但主机是 arm64，提示需要 Rosetta
+    if arch == "x86_64" and host_arch == "arm64":
+        print("\n⚠️  检测到 Apple Silicon 上构建 Intel 版本")
+        print("   需要在 Rosetta 2 下运行 Python：")
+        print("   arch -x86_64 python3 build_macos.py --arch x86_64")
+        if is_macos:
+            # 检查是否真的在 Rosetta 下运行
+            import subprocess as _sp
+            res = _sp.run(["sysctl", "-n", "sysctl.proc_translated"], capture_output=True, text=True)
+            if res.stdout.strip() == "1":
+                print("   ✅ 确认在 Rosetta 转译模式下运行")
+            else:
+                print("   ❌ 当前未在 Rosetta 模式！请用 'arch -x86_64' 前缀重新运行")
+                sys.exit(1)
     
     if not is_macos:
         print("\n继续生成构建配置，但不实际打包...")
@@ -222,11 +248,19 @@ def main():
     print(f"\n[2/4] 下载 EasyTier macOS {arch} 版...")
     et_dir = download_macos_easytier(base_dir, arch)
     
-    print(f"\n[3/4] 构建 .app...")
+    print(f"\n[3/4] 构建 .app ({arch})...")
     if build_macos_app(base_dir, arch, et_dir):
         app_path = base_dir / "dist" / "迅鲨加速器.app"
         if app_path.exists():
             print(f"  ✅ 打包成功: {app_path}")
+            
+            # 验证产物架构
+            if is_macos:
+                import subprocess as _sp
+                main_bin = app_path / "Contents" / "MacOS" / "迅鲨加速器"
+                if main_bin.exists():
+                    res = _sp.run(["file", str(main_bin)], capture_output=True, text=True)
+                    print(f"  架构信息: {res.stdout.strip()}")
             
             print(f"\n[4/4] 创建 DMG...")
             dmg_path = base_dir / f"迅鲨加速器-v1.0.0-macOS-{arch}.dmg"
