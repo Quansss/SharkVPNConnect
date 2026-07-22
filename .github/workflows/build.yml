@@ -12,9 +12,9 @@ jobs:
   build:
     name: Build (${{ matrix.label }})
     runs-on: ${{ matrix.os }}
-    # 取消正在跑的上一轮 build（避免 runner 排队、节省时间）
+    # 每个 matrix job 独立并发，不互相 cancel
     concurrency:
-      group: ${{ github.workflow }}-${{ github.ref }}
+      group: ${{ github.workflow }}-${{ matrix.os }}-${{ matrix.arch }}-${{ github.ref }}
       cancel-in-progress: true
     strategy:
       fail-fast: false
