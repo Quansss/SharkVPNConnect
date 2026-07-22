@@ -118,6 +118,7 @@ def build_macos_app(base_dir, arch, et_dir):
         # macOS binaries: ('/abs/path', 'dest_subdir/')
         binaries_repr += f"    (r'{src}', 'bin/{name}'),\n"
     binaries_repr += "]"
+    base_dir_s = str(base_dir).replace("\\", "/") + "/"
 
     spec_content = f'''# -*- mode: python ; coding: utf-8 -*-
 import sys, os
@@ -136,7 +137,7 @@ hiddenimports = [
 ]
 
 a = Analysis(
-    [str(Path(__file__).parent / "simple_client.py")],
+    [r'{base_dir_s}simple_client.py'],
     pathex=[],
     binaries=binaries,
     datas=[],
