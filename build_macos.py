@@ -122,8 +122,7 @@ def build_macos_app(base_dir, arch, et_dir):
     spec_content = f'''# -*- mode: python ; coding: utf-8 -*-
 import sys, os
 from pathlib import Path
-from PyInstaller.building.api import EXE, COLLECT, PYZ
-from PyInstaller.building.datastruct import Tree, struct
+from PyInstaller.building.api import EXE, COLLECT, PYZ, BUNDLE
 
 block_cipher = None
 
