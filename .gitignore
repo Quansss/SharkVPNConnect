@@ -1,0 +1,41 @@
+﻿# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+
+# 构建产物
+build/
+dist/
+release/
+*.spec
+
+# EasyTier 资源（构建时重新下载）
+easytier-extract/
+easytier.zip
+easytier-macos-*.zip
+
+# 日志
+*.log
+build_err.txt
+build_log.txt
+
+# 测试/调试脚本
+test_*.py
+ssh_*.py
+patch_*.py
+ssh_askpass_helper.bat
+
+# 系统
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# 凭据/敏感文件
+*.token
+.env
