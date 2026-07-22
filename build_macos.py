@@ -115,8 +115,8 @@ def build_macos_app(base_dir, arch, et_dir):
     # 构建 binaries 参数字符串（供 spec 使用）
     binaries_repr = "[\n"
     for src, name in et_binaries:
-        # macOS binaries: ('/abs/path', 'dest_subdir/')
-        binaries_repr += f"    (r'{src}', 'bin/{name}'),\n"
+        # macOS binaries: ('/abs/path', 'dest_subdir/') — 注意尾部斜杠
+        binaries_repr += f"    (r'{src}', 'bin/'),\n"
     binaries_repr += "]"
     base_dir_s = str(base_dir).replace("\\", "/") + "/"
 

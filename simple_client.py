@@ -255,9 +255,12 @@ class EasyTierManager:
         else:
             roots.append(Path(__file__).parent)
 
-        # 1) 浅层查找（根 / bin / bundled）
+        # 1) 浅层查找（根 / bin / bundled / Resources/bin）
         for r in roots:
-            for d in [r, r / 'bin', r / 'bundled']:
+            search_dirs = [r, r / 'bin', r / 'bundled']
+            if IS_MACOS:
+                search_dirs += [r / 'Resources' / 'bin']
+            for d in search_dirs:
                 hit = _check_dir(d)
                 if hit:
                     return hit
@@ -269,6 +272,14 @@ class EasyTierManager:
                 for p in base.glob('**/easytier-core'):
                     if p.is_file() and _check_dir(p.parent):
                         return p.parent
+            except Exception:
+                pass
+            # 尝试 Contents/Resources/bin/ （Bundle 结构的另一可能位置）
+            try:
+                resources_bin = base.parent / 'Resources' / 'bin'
+                hit = _check_dir(resources_bin)
+                if hit:
+                    return hit
             except Exception:
                 pass
         return None
@@ -317,7 +328,14 @@ class EasyTierManager:
     def _download(self, log_callback=None):
         """联网下载 EasyTier（备用）"""
         try:
-            url = "https://github.com/EasyTier/EasyTier/releases/download/v2.6.4/easytier-windows-x86_64-v2.6.4.zip"
+            # 根据平台选择下载 URL
+            if IS_MACOS:
+                import platform as _pm
+                mach = _pm.machine()
+                arch_suffix = "aarch64" if mach == "arm64" else "x86_64"
+                url = f"https://github.com/EasyTier/EasyTier/releases/download/v2.6.4/easytier-macos-{arch_suffix}-v2.6.4.zip"
+            else:
+                url = "https://github.com/EasyTier/EasyTier/releases/download/v2.6.4/easytier-windows-x86_64-v2.6.4.zip"
             temp_zip = self.app_dir / 'temp_easytier.zip'
 
             if log_callback:
