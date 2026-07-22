@@ -8,6 +8,13 @@ import subprocess
 import shutil
 from pathlib import Path
 
+# 强制 UTF-8 输出（避免 Windows CI 环境的 cp1252 编码问题）
+try:
+    sys.stdout.reconfigure(encoding='utf-8')
+    sys.stderr.reconfigure(encoding='utf-8')
+except Exception:
+    pass
+
 def check_pyinstaller():
     """检查并安装 pyinstaller"""
     try:
@@ -17,6 +24,30 @@ def check_pyinstaller():
         print("正在安装 PyInstaller...")
         subprocess.run([sys.executable, "-m", "pip", "install", "pyinstaller"], check=True)
         return True
+
+def ensure_windows_easytier(base_dir):
+    """如果本地不存在 EasyTier Windows 二进制，从 GitHub 下载"""
+    et_dir = base_dir / "easytier-extract" / "easytier-windows-x86_64"
+    et_files = ['easytier-core.exe', 'wintun.dll', 'WinDivert64.sys', 'Packet.dll']
+    if all((et_dir / f).exists() for f in et_files):
+        print(f"  已存在本地 EasyTier: {et_dir}")
+        return et_dir
+
+    print("  本地未找到 EasyTier，从 GitHub 下载...")
+    import urllib.request
+    import zipfile
+    EASYTIER_VERSION = "v2.6.4"
+    url = f"https://github.com/EasyTier/EasyTier/releases/download/{EASYTIER_VERSION}/easytier-windows-x86_64-{EASYTIER_VERSION}.zip"
+    zip_path = base_dir / f"easytier-windows-x86_64-{EASYTIER_VERSION}.zip"
+    print(f"  下载: {url}")
+    urllib.request.urlretrieve(url, zip_path)
+    print(f"  下载完成: {zip_path.stat().st_size} bytes")
+    et_dir.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(zip_path) as zf:
+        zf.extractall(et_dir.parent)
+    zip_path.unlink()
+    print(f"  解压到: {et_dir}")
+    return et_dir
 
 def build():
     """构建 exe"""
@@ -42,11 +73,14 @@ def build():
             shutil.rmtree(folder_path)
             print(f"  已删除: {folder}")
     
+    # 确保 EasyTier 资源可用（本地有则用，没有则下载）
+    print("\n[2.5/5] 准备 EasyTier 资源...")
+    et_dir = ensure_windows_easytier(base_dir)
+    et_files = ['easytier-core.exe', 'wintun.dll', 'WinDivert64.sys', 'Packet.dll']
+    
     # 构建客户端
     print("\n[3/5] 构建客户端 (迅鲨加速器.exe)...")
     # 内置 EasyTier 资源（避免下载失败）
-    et_dir = base_dir / "easytier-extract" / "easytier-windows-x86_64"
-    et_files = ['easytier-core.exe', 'wintun.dll', 'WinDivert64.sys', 'Packet.dll']
     add_data_args = []
     for f in et_files:
         src = et_dir / f

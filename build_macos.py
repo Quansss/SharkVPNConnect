@@ -8,6 +8,14 @@ Windows 上无法直接打包 .app，但可以生成 macOS 用的 spec 文件
 import os
 import sys
 import platform
+import io
+
+# 强制 UTF-8 输出（避免 Windows CI 环境的 cp1252 编码问题）
+try:
+    sys.stdout.reconfigure(encoding='utf-8')
+    sys.stderr.reconfigure(encoding='utf-8')
+except Exception:
+    pass
 import subprocess
 import shutil
 from pathlib import Path
@@ -45,11 +53,12 @@ def download_macos_easytier(base_dir, arch):
     et_dir = base_dir / "easytier-extract" / f"easytier-macos-{arch}"
     et_dir.mkdir(parents=True, exist_ok=True)
     
-    # EasyTier GitHub releases URL
+    # EasyTier GitHub releases URL（锁定到具体版本，避免 latest 不稳定）
+    EASYTIER_VERSION = "v2.6.4"
     if arch == "arm64":
-        url = "https://github.com/EasyTier/EasyTier/releases/latest/download/easytier-macos-arm64.zip"
+        url = f"https://github.com/EasyTier/EasyTier/releases/download/{EASYTIER_VERSION}/easytier-macos-aarch64-{EASYTIER_VERSION}.zip"
     else:
-        url = "https://github.com/EasyTier/EasyTier/releases/latest/download/easytier-macos-x64.zip"
+        url = f"https://github.com/EasyTier/EasyTier/releases/download/{EASYTIER_VERSION}/easytier-macos-x86_64-{EASYTIER_VERSION}.zip"
     
     print(f"  下载 EasyTier for {arch}...")
     zip_path = base_dir / f"easytier-macos-{arch}.zip"
